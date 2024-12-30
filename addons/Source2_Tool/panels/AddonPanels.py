@@ -4,12 +4,11 @@ import bpy
 from ..operators.AddonOperators import ChangeLanguage, ChangeHammerUnit,AddOutline, ExportModel
 from ....common.types.framework import reg_order
 from ..config import __addon_name__
-from ....common.i18n.i18n import i18n
 
 class BasePanel(object):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "S2Tool"
+    bl_category = "Source 2"
 
     @classmethod
     def poll(cls, context: bpy.types.Context):
