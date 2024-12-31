@@ -13,10 +13,7 @@
 						_class = "DefaultMaterialGroup"
 						remaps = 
 						[
-							{
-								from = "材质.001.vmat"
-								to = "shader/test.vmat"
-							}
+
 						]
 						use_global_default = false
 						global_default_material = ""
