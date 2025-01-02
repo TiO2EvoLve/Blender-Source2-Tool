@@ -1,6 +1,5 @@
-
+import json
 import os
-import re
 import bpy
 import keyvalues3 as kv3
 from ..config import __addon_name__
@@ -101,30 +100,35 @@ class ExportModel(bpy.types.Operator):
         addon_prefs = context.preferences.addons[__addon_name__].preferences
         # 获取选中的物体
         selected_objects = bpy.context.selected_objects
-        # 获取选中物体的名称
-        select_name = selected_objects[0].name
-        # 获取导出路径
-        directory = os.path.join(addon_prefs.filepath, select_name)
-        #记录材质名称
-        material_name = selected_objects[0].material_slots[0].name
-        #导出FBX文件
-        self.export_fbx(selected_objects[0], directory)
-        #导出PBR材质贴图
-        self.export_pbr_textures(selected_objects[0], directory)
-        # 导出VMAT文件
-        self.export_vmat(select_name, directory,selected_objects[0])
-        #导出VMDL文件
-        self.export_vmdl(select_name, directory,selected_objects[0])
-        # 提示用户导出成功
-        self.report({'INFO'}, f"Exported to {directory}")
+        for obj in selected_objects:
+            # 清除所有选择
+            bpy.ops.object.select_all(action='DESELECT')
+            # 选择当前物体
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj  # 设置活动对象
+            # 获取选中物体的名称
+            select_name = obj.name
+            # 获取导出路径
+            directory = os.path.join(addon_prefs.filepath, select_name)
+            #导出FBX文件
+            self.export_fbx(obj, directory)
+            #导出PBR材质贴图生成vmat文件
+            self.export_pbr_textures(obj, directory)
+            #导出VMDL文件
+            self.export_vmdl(select_name, directory,obj)
+            # 提示用户导出成功
+            self.report({'INFO'}, f"已导出 {directory}")
         return {'FINISHED'}
 
-    #导出PBR材质贴图
+    #导出PBR材质和创建vmat
     def export_pbr_textures(self,obj, export_dir):
         if not os.path.exists(export_dir):
             os.makedirs(export_dir)
         for mat_slot in obj.material_slots:
             mat = mat_slot.material
+            json_path = os.path.join(os.path.dirname(__file__), "templates", "material.vmat")
+            with open(json_path, "r", encoding="utf-8-sig") as file:
+                data = json.load(file)
             if mat and mat.use_nodes:
                 for node in mat.node_tree.nodes:
                 # 查找图像纹理节点
@@ -134,44 +138,59 @@ class ExportModel(bpy.types.Operator):
                             # 导出漫反射贴图
                             if "Base Color" in node.label:
                                 image_path = os.path.join(export_dir, "texture", f"{mat.name}_diffuse.png")
-                                image.filepath_raw = image_path
-                                image.file_format = 'PNG'
-                                image.save()
+                                self.savepng(image, image_path)
+                                path = os.path.join("models", obj.name, "texture", f"{mat.name}_diffuse.png").replace("\\", "/")
+                                data["Layer0"]["Color"]["TextureColor"] = path
                             # 导出法线贴图
                             if "Normal" in node.label:
                                 normal_path = os.path.join(export_dir, "texture", f"{mat.name}_normal.png")
-                                image.filepath_raw = normal_path
-                                image.file_format = 'PNG'
-                                image.save()
+                                self.savepng(image, normal_path)
+                                path = os.path.join("models", obj.name, "texture", f"{mat.name}_normal.png").replace("\\", "/")
+                                data["Layer0"]["TextureNormal"] = path
                             # 导出粗糙度贴图
                             if "Roughness" in node.label:
                                 roughness_path = os.path.join(export_dir, "texture", f"{mat.name}_roughness.png")
-                                image.filepath_raw = roughness_path
-                                image.file_format = 'PNG'
-                                image.save()
+                                self.savepng(image, roughness_path)
+                                path = os.path.join("models", obj.name, "texture", f"{mat.name}_roughness.png").replace("\\", "/")
+                                data["Layer0"]["Roughness"]["TextureRoughness"] = path
                             # 导出金属度贴图
                             if "Metallic" in node.label:
                                 metallic_path = os.path.join(export_dir, "texture", f"{mat.name}_metallic.png")
-                                image.filepath_raw = metallic_path
-                                image.file_format = 'PNG'
-                                image.save()
+                                self.savepng(image, metallic_path)
+                                path = os.path.join("models", obj.name, "texture", f"{mat.name}_metallic.png").replace("\\", "/")
+                                data["Layer0"]["PBR"]["F_SPECULAR"] = "1"
+                                data["Layer0"]["PBR"]["F_METALNESS_TEXTURE"] = "1"
+                                data["Layer0"]["Metalness"]["TextureMetalness"] = path
                             # 导出透明度贴图
                             if "Opacity" in node.label:
                                 opacity_path = os.path.join(export_dir, "texture", f"{mat.name}_opacity.png")
-                                image.filepath_raw = opacity_path
-                                image.file_format = 'PNG'
-                                image.save()
+                                self.savepng(image, opacity_path)
+                                path = os.path.join("models", obj.name, "texture", f"{mat.name}_opacity.png").replace("\\", "/")
+                                data["Layer0"]["Translucent"]["F_TRANSLUCENT"] = "1"
+                                data["Layer0"]["TranslucentAdditional"]["TextureTranslucency"] = path
                             # 导出发光贴图
                             if "Emission" in node.label:
                                 emission_path = os.path.join(export_dir, "texture", f"{mat.name}_emission.png")
-                                image.filepath_raw = emission_path
-                                image.file_format = 'PNG'
-                                image.save()
-    #导出FBX文件
-    def export_fbx(self,obj, export_dir):
+                                self.savepng(image, emission_path)
+                                path = os.path.join("models", obj.name, "texture", f"{mat.name}_emission.png").replace("\\", "/")
+                                data["Layer0"]["PBR"]["F_SPECULAR"] = "1"
+                                data["Layer0"]["SelfIllum"]["TextureSelfIllumMask"] = path
+            modified_content = dict_to_string(data)
+            # 保存修改后的数据
+            output_file = os.path.join(export_dir, "texture", mat.name + ".vmat")
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(modified_content)
+
+    # 保存图片
+    def savepng(self, image, path):
+        image.filepath_raw = path
+        image.file_format = 'PNG'
+        image.save()
+
+    # 导出FBX文件
+    def export_fbx(self, obj, export_dir):
         if not os.path.exists(export_dir):
             os.makedirs(export_dir)
-
         filepath = os.path.join(export_dir, f"{obj.name}.fbx")
         bpy.ops.export_scene.fbx(
             filepath=filepath,
@@ -182,8 +201,9 @@ class ExportModel(bpy.types.Operator):
             object_types={'MESH'},
             bake_space_transform=True
         )
-    #导出VMDL文件
-    def export_vmdl(self,select_name, directory,obj):
+
+    # 导出VMDL文件
+    def export_vmdl(self, select_name, directory, obj):
         # 读取Vmdl模板文件
         template = os.path.join(os.path.dirname(__file__), "templates", "model.vmdl")
         if template is None or not os.path.exists(template):
@@ -198,7 +218,7 @@ class ExportModel(bpy.types.Operator):
                     if "filename" in render_child:
                         path = os.path.join("models", select_name, select_name + ".fbx").replace("\\", "/")
                         render_child["filename"] = path  # 修改文件名
-        #修改材质路径
+        # 修改材质路径
         for child in bt_config["rootNode"]["children"]:
             if child["_class"] == "MaterialGroupList":
                 for material_group in child["children"]:
@@ -214,35 +234,16 @@ class ExportModel(bpy.types.Operator):
         # 写入VMDL 文件
         savename = os.path.join(directory, select_name + ".vmdl")
         kv3.write(bt_config, savename)
-    #导出VMAT文件
-    def export_vmat(self,select_name, directory, obj):
-        # 读取Vmat模板文件
-        template = os.path.join(os.path.dirname(__file__), "templates", "material.vmat")
-        with open(template, "r", encoding="utf-8") as f:
-            kv3_data = f.read()
-        for mat_slot in obj.material_slots:
-            mat = mat_slot.material
-            # 使用正则表达式修改 TextureColor 的值
-            pattern = r'(\bTextureColor\b\s+"[^"]+")'
-            diffusepath = os.path.join("models", select_name, "texture", mat.name + "_diffuse.png").replace("\\", "/")
-            replacement = f'TextureColor "{diffusepath}"'
-            kv3_data_modified = re.sub(pattern, replacement, kv3_data)
+#将字典转换为vmat格式
+def dict_to_string( data, indent=0):
+    result = ""
+    for key, value in data.items():
+        if isinstance(value, dict):
+            result += " " * indent + key + " {\n"
+            result += dict_to_string(value, indent + 4)
+            result += " " * indent + "}\n"
+        else:
+            result += " " * indent + f'{key} "{value}"\n'
+    return result
 
-            # 修改 TextureNormal
-            pattern = r'(\bTextureNormal\b\s+"[^"]+")'
-            normalpath = os.path.join("models", select_name, "texture", mat.name + "_normal.png").replace("\\", "/")
-            if os.path.exists(normalpath):
-                replacement = f'TextureNormal "{normalpath}"'
-                kv3_data_modified = re.sub(pattern, replacement, kv3_data_modified)
 
-            # 修改 TextureRoughness
-            pattern = r'(\bTextureRoughness\b\s+"[^"]+")'
-            roughnesspath = os.path.join("models", select_name, "texture", mat.name + "_roughness.png").replace("\\",
-                                                                                                                     "/")
-            if os.path.exists(roughnesspath):
-                replacement = f'TextureRoughness "{roughnesspath}"'
-                kv3_data_modified = re.sub(pattern, replacement, kv3_data_modified)
-            # 保存修改后的数据
-            output_file = os.path.join(directory, "texture", mat.name + ".vmat")
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(kv3_data_modified)

@@ -9,14 +9,14 @@ from ...common.i18n.i18n import load_dictionary
 
 # Add-on info
 bl_info = {
-    "name": "Basic Add-on Sample",
-    "author": "[You name]",
+    "name": "Source 2 Tool",
+    "author": "[TiO2 EvoLve]",
     "blender": (3, 5, 0),
     "version": (0, 0, 1),
-    "description": "This is a template for building addons",
+    "description": "a tool for Source 2",
     "warning": "",
-    "doc_url": "[documentation url]",
-    "tracker_url": "[contact email]",
+    "doc_url": "[https://github.com/TiO2EvoLve/Blender-Source2-Tool]",
+    "tracker_url": "[https://github.com/TiO2EvoLve/Blender-Source2-Tool/issues]",
     "support": "COMMUNITY",
     "category": "3D View"
 }
